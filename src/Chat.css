@@ -1,0 +1,17 @@
+.chat-box {
+  padding: 20px;
+  color: white;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.chat-input {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.chat-message {
+  margin: 5px 0;
+}
