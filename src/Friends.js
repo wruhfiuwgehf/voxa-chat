@@ -49,7 +49,7 @@ function Friends() {
               <span onClick={() => handleChat(friend.uid)} style={{ cursor: 'pointer', color: '#fff' }}>
                 {friend.username}
               </span>
-              <button onClick={() => handleUnfriend(friend.uid)} style={{ color: 'red' }}>
+              <button onClick={() => handleUnfriend(friend.uid)} style={{ color: 'white' }}>
                 Unfriend
               </button>
             </div>
