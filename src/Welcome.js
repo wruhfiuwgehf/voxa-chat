@@ -11,6 +11,7 @@ function Welcome() {
       <h1>This is dedicated to Sathvik Edara</h1>
       <button onClick={() => navigate('/signup')}>Sign Up</button>
       <button onClick={() => navigate('/login')}>Log In</button>
+    <h1>By Rahul Goplani</h1>
     </div>
   );
 }
