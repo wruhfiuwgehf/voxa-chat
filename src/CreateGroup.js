@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, getDocs, addDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { useNavigate } from 'react-router-dom';
 
@@ -8,73 +8,68 @@ function CreateGroup() {
   const [users, setUsers] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
   const navigate = useNavigate();
+  const currentUser = auth.currentUser;
 
   useEffect(() => {
-    const fetchUsers = async () => {
-      const querySnapshot = await getDocs(collection(db, 'users'));
-      const allUsers = querySnapshot.docs
-        .map(doc => doc.data())
-        .filter(user => user.uid !== auth.currentUser.uid);
-      setUsers(allUsers);
-    };
+    const q = query(collection(db, 'users'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const usersList = snapshot.docs
+        .map((doc) => doc.data())
+        .filter((user) => user.uid !== currentUser?.uid);
+      setUsers(usersList);
+    });
 
-    fetchUsers();
-  }, []);
+    return () => unsubscribe();
+  }, [currentUser]);
 
-  const toggleSelectUser = (uid) => {
+  const toggleUser = (uid) => {
     setSelectedUsers((prev) =>
-      prev.includes(uid)
-        ? prev.filter((id) => id !== uid)
-        : [...prev, uid]
+      prev.includes(uid) ? prev.filter((id) => id !== uid) : [...prev, uid]
     );
   };
 
   const handleCreateGroup = async () => {
-    if (!groupName.trim()) {
-      alert('Please enter a group name.');
+    if (!groupName || selectedUsers.length === 0) {
+      alert('Please enter a group name and select at least one user.');
       return;
     }
 
-    if (selectedUsers.length === 0) {
-      alert('Please select at least one member.');
-      return;
+    try {
+      const groupDoc = await addDoc(collection(db, 'groups'), {
+        name: groupName,
+        members: [currentUser.uid, ...selectedUsers],
+        createdAt: serverTimestamp(),
+      });
+
+      navigate(`/group/${groupDoc.id}`);
+    } catch (err) {
+      console.error('Error creating group:', err);
+      alert('Failed to create group.');
     }
-
-    const groupData = {
-      name: groupName,
-      members: [auth.currentUser.uid, ...selectedUsers],
-      createdAt: Date.now(),
-    };
-
-    const docRef = await addDoc(collection(db, 'groups'), groupData);
-    navigate(`/group/${docRef.id}`);
   };
 
   return (
-    <div className="create-group-container">
+    <div className="group-create-container">
       <h2>Create Group</h2>
       <input
         type="text"
-        placeholder="Enter group name"
+        placeholder="Group Name"
         value={groupName}
         onChange={(e) => setGroupName(e.target.value)}
+        className="group-input"
       />
-      <h4>Select members:</h4>
-      <div className="user-list">
+      <ul className="user-list">
         {users.map((user) => (
-          <label key={user.uid} style={{ display: 'block', margin: '5px 0' }}>
-            <input
-              type="checkbox"
-              checked={selectedUsers.includes(user.uid)}
-              onChange={() => toggleSelectUser(user.uid)}
-            />
-            {user.username}
-          </label>
+          <li
+            key={user.uid}
+            className={`user-item ${selectedUsers.includes(user.uid) ? 'selected' : ''}`}
+            onClick={() => toggleUser(user.uid)}
+          >
+            {user.username || user.email}
+          </li>
         ))}
-      </div>
-      <button onClick={handleCreateGroup} style={{ marginTop: '10px' }}>
-        Create Group
-      </button>
+      </ul>
+      <button onClick={handleCreateGroup}>Create Group</button>
     </div>
   );
 }
