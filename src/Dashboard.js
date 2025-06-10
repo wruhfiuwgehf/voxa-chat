@@ -21,5 +21,7 @@ function Dashboard() {
     </div>
   );
 }
-
+<body>
+  <h1>Voxa Welcomes You </h1>
+</body>
 export default Dashboard;

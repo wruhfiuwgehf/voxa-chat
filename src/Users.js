@@ -1,44 +1,62 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, onSnapshot, setDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import './Users.css';
 
 function Users() {
   const [users, setUsers] = useState([]);
+  const [friends, setFriends] = useState([]);
   const [search, setSearch] = useState('');
-  const [friends, setFriends] = useState(() => {
-    const saved = localStorage.getItem('friends') || '[]';
-    return JSON.parse(saved);
-  });
-
-  const navigate = useNavigate();
   const currentUser = auth.currentUser;
 
   useEffect(() => {
-    const q = query(collection(db, 'users'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const usersData = snapshot.docs
-        .map((doc) => doc.data())
-        .filter((user) => user.uid !== currentUser?.uid);
-      setUsers(usersData);
+    if (!currentUser) return;
+
+    const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
+      const usersList = snapshot.docs
+        .map(doc => ({ uid: doc.id, ...doc.data() }))
+        .filter(user => user.uid !== currentUser.uid); // don't show self
+      setUsers(usersList);
     });
 
-    return () => unsubscribe();
+    const friendsRef = doc(db, 'friends', currentUser.uid);
+    const unsubscribeFriends = onSnapshot(friendsRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setFriends(data.friendIds || []);
+      } else {
+        setDoc(friendsRef, { friendIds: [] });
+        setFriends([]);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeFriends();
+    };
   }, [currentUser]);
 
-  const toggleFriend = (uid) => {
-    let updated;
+  const toggleFriend = async (uid) => {
+    if (!uid || !currentUser) return;
+    const docRef = doc(db, 'friends', currentUser.uid);
+    let updatedFriends = [...friends];
+
     if (friends.includes(uid)) {
-      updated = friends.filter((id) => id !== uid);
+      updatedFriends = updatedFriends.filter(id => id !== uid);
     } else {
-      updated = [...friends, uid];
+      updatedFriends.push(uid);
     }
-    setFriends(updated);
-    localStorage.setItem('friends', JSON.stringify(updated));
+
+    try {
+      await updateDoc(docRef, { friendIds: updatedFriends });
+      setFriends(updatedFriends);
+    } catch (error) {
+      console.error("Error updating friends:", error);
+    }
   };
 
-  const filteredUsers = users.filter((user) =>
+  const filteredUsers = users.filter(user =>
     user.username?.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -46,31 +64,28 @@ function Users() {
     <div className="users-container">
       <h2>Users</h2>
       <input
+        className="search-bar"
         type="text"
         placeholder="Search users..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="search-input"
       />
-      {filteredUsers.length === 0 ? (
-        <p>No users found.</p>
-      ) : (
-        <ul className="user-list">
-          {filteredUsers.map((user) => (
-            <li key={user.uid} className="user-item">
-              <span onClick={() => navigate(`/chat/${user.uid}`)}>
-                {user.username || user.email}
-              </span>
-              <span
-                className={`heart ${friends.includes(user.uid) ? 'active' : ''}`}
-                onClick={() => toggleFriend(user.uid)}
-              >
-                ❤️
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <ul className="user-list">
+        {filteredUsers.map((user) => (
+          <li key={user.uid} className="user-item">
+            <Link to={`/chat/${user.uid}`} className="username">
+              {user.username || 'Unnamed'}
+            </Link>
+            <button
+              className={`heart-button ${friends.includes(user.uid) ? 'hearted' : ''}`}
+              onClick={() => toggleFriend(user.uid)}
+            >
+              ❤️
+            </button>
+          </li>
+        ))}
+        {filteredUsers.length === 0 && <li className="no-users">No users found.</li>}
+      </ul>
     </div>
   );
 }

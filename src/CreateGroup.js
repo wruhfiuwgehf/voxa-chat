@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { useNavigate } from 'react-router-dom';
 
@@ -11,65 +11,90 @@ function CreateGroup() {
   const currentUser = auth.currentUser;
 
   useEffect(() => {
-    const q = query(collection(db, 'users'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const usersList = snapshot.docs
-        .map((doc) => doc.data())
-        .filter((user) => user.uid !== currentUser?.uid);
-      setUsers(usersList);
+    const unsubscribe = onSnapshot(collection(db, 'users'), snapshot => {
+      const userList = snapshot.docs
+        .map(doc => doc.data())
+        .filter(user => user.uid !== currentUser.uid && user.username); // ✅ filter out self and invalid usernames
+      setUsers(userList);
     });
 
     return () => unsubscribe();
   }, [currentUser]);
 
   const toggleUser = (uid) => {
-    setSelectedUsers((prev) =>
-      prev.includes(uid) ? prev.filter((id) => id !== uid) : [...prev, uid]
+    setSelectedUsers(prev =>
+      prev.includes(uid)
+        ? prev.filter(id => id !== uid)
+        : [...prev, uid]
     );
   };
 
-  const handleCreateGroup = async () => {
-    if (!groupName || selectedUsers.length === 0) {
-      alert('Please enter a group name and select at least one user.');
+  const createGroup = async () => {
+    if (!groupName.trim()) {
+      alert('Please enter a group name.');
+      return;
+    }
+
+    if (selectedUsers.length === 0) {
+      alert('Please select at least one user.');
       return;
     }
 
     try {
-      const groupDoc = await addDoc(collection(db, 'groups'), {
+      const groupRef = await addDoc(collection(db, 'groups'), {
         name: groupName,
         members: [currentUser.uid, ...selectedUsers],
-        createdAt: serverTimestamp(),
+        createdAt: new Date(),
       });
 
-      navigate(`/group/${groupDoc.id}`);
-    } catch (err) {
-      console.error('Error creating group:', err);
-      alert('Failed to create group.');
+      navigate(`/group/${groupRef.id}`);
+    } catch (error) {
+      console.error('Error creating group:', error);
+      alert('Failed to create group. Please try again.');
     }
   };
 
   return (
-    <div className="group-create-container">
+    <div style={{ color: 'white', padding: '20px', maxWidth: '600px', margin: 'auto' }}>
       <h2>Create Group</h2>
       <input
         type="text"
-        placeholder="Group Name"
+        placeholder="Group name"
         value={groupName}
-        onChange={(e) => setGroupName(e.target.value)}
-        className="group-input"
+        onChange={e => setGroupName(e.target.value)}
+        style={{ padding: '10px', width: '100%', marginBottom: '20px', borderRadius: '8px' }}
       />
-      <ul className="user-list">
-        {users.map((user) => (
-          <li
+      <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+        {users.map(user => (
+          <div
             key={user.uid}
-            className={`user-item ${selectedUsers.includes(user.uid) ? 'selected' : ''}`}
             onClick={() => toggleUser(user.uid)}
+            style={{
+              padding: '10px',
+              margin: '5px 0',
+              backgroundColor: selectedUsers.includes(user.uid) ? '#6c5ce7' : 'rgba(255,255,255,0.1)',
+              borderRadius: '8px',
+              cursor: 'pointer'
+            }}
           >
-            {user.username || user.email}
-          </li>
+            {user.username}
+          </div>
         ))}
-      </ul>
-      <button onClick={handleCreateGroup}>Create Group</button>
+      </div>
+      <button
+        onClick={createGroup}
+        style={{
+          marginTop: '20px',
+          padding: '10px 20px',
+          border: 'none',
+          borderRadius: '8px',
+          background: '#a29bfe',
+          color: 'white',
+          cursor: 'pointer'
+        }}
+      >
+        Create Group
+      </button>
     </div>
   );
 }
