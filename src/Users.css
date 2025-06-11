@@ -1,17 +1,46 @@
 .users-container {
-  color: white;
   padding: 20px;
+  color: white;
 }
 
-.users-container ul {
+.user-list {
   list-style: none;
   padding: 0;
 }
 
-.users-container li {
-  margin: 10px 0;
-  background: rgba(255, 255, 255, 0.1);
+.user-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.05);
   padding: 10px;
-  border-radius: 5px;
+  margin-bottom: 8px;
+  border-radius: 6px;
 }
-  
+
+.user-name {
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 16px;
+  color: #fff;
+}
+
+.heart-icon {
+  cursor: pointer;
+  font-size: 20px;
+  transition: transform 0.2s;
+}
+
+.heart-icon.added {
+  color: red;
+  transform: scale(1.2);
+}
+
+.badge {
+  background-color: crimson;
+  color: white;
+  border-radius: 50%;
+  padding: 2px 8px;
+  margin-left: 10px;
+  font-size: 12px;
+}

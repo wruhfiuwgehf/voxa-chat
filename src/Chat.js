@@ -1,15 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { auth, db } from './firebase';
 import {
   collection,
   addDoc,
   query,
-  where,
   orderBy,
+  where,
   onSnapshot,
-  doc,
-  getDoc,
   serverTimestamp,
 } from 'firebase/firestore';
 import EmojiPicker from 'emoji-picker-react';
@@ -19,96 +18,127 @@ function Chat() {
   const currentUser = auth.currentUser;
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
-  const [showEmoji, setShowEmoji] = useState(false);
-
-  const getChatId = (uid1, uid2) => [uid1, uid2].sort().join('_');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [usernames, setUsernames] = useState({});
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const bottomRef = useRef();
+  const containerRef = useRef();
 
   useEffect(() => {
-    if (!currentUser || !id) return;
-    const chatId = getChatId(currentUser.uid, id);
     const q = query(
       collection(db, 'messages'),
-      where('chatId', '==', chatId),
-      orderBy('timestamp')
+      orderBy('timestamp'),
+      where('chatId', '==', getChatId(currentUser.uid, id))
     );
-    const unsubscribe = onSnapshot(q, snapshot => {
-      setMessages(snapshot.docs.map(doc => doc.data()));
+
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const msgs = [];
+      const nameMap = { ...usernames };
+
+      for (const docSnap of snapshot.docs) {
+        const data = docSnap.data();
+        if (!nameMap[data.sender]) {
+          const userSnap = await getDoc(doc(db, 'users', data.sender));
+
+          nameMap[data.sender] = userSnap.exists ? userSnap.data().username : 'Unknown';
+        }
+        msgs.push(data);
+      }
+
+      setUsernames(nameMap);
+      setMessages(msgs);
     });
+
     return () => unsubscribe();
-  }, [id, currentUser]);
+  }, [id]);
 
-  const sendMessage = async () => {
-    if (!text.trim()) return;
-    const userSnap = await getDoc(doc(db, 'users', currentUser.uid));
-    const senderName = userSnap.exists() ? userSnap.data().username : 'Unknown';
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
-    await addDoc(collection(db, 'messages'), {
-      chatId: getChatId(currentUser.uid, id),
-      sender: currentUser.uid,
-      senderName,
-      receiver: id,
-      text,
-      timestamp: serverTimestamp(),
-    });
-
-    setText('');
-    setShowEmoji(false);
+  const getChatId = (uid1, uid2) => {
+    return [uid1, uid2].sort().join('_');
   };
 
-  const formatTime = (timestamp) => {
-    const date = timestamp?.toDate?.();
-    return date ? new Intl.DateTimeFormat('default', {
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date) : '';
+  const sendMessage = async () => {
+    if (text.trim()) {
+      await addDoc(collection(db, 'messages'), {
+        text,
+        sender: currentUser.uid,
+        receiver: id,
+        chatId: getChatId(currentUser.uid, id),
+        timestamp: serverTimestamp(),
+      });
+      setText('');
+    }
+  };
+
+  const handleEmojiClick = (emojiData) => {
+    setText(prev => prev + emojiData.emoji);
+  };
+
+  const scrollToBottom = () => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleScroll = () => {
+    if (!containerRef.current) return;
+    const { scrollTop, clientHeight, scrollHeight } = containerRef.current;
+    setShowScrollButton(scrollHeight - scrollTop > clientHeight + 200);
   };
 
   return (
-    <div style={{ padding: '20px', color: 'white' }}>
-      <h2>Private Chat</h2>
-      <div style={{ maxHeight: 300, overflowY: 'scroll', marginBottom: 10 }}>
-        {messages.map((msg, index) => (
+    <div>
+      <h2>Chat</h2>
+      <div
+        ref={containerRef}
+        style={{ height: '400px', overflowY: 'auto', border: '1px solid #ccc', padding: '10px' }}
+        onScroll={handleScroll}
+      >
+        {messages.map((msg, i) => (
           <div
-            key={index}
+            key={i}
             style={{
+              marginBottom: 10,
               textAlign: msg.sender === currentUser.uid ? 'right' : 'left',
-              marginBottom: '10px'
+              color: msg.sender === currentUser.uid ? 'cyan' : 'pink',
             }}
           >
-            <div style={{
-              display: 'inline-block',
-              backgroundColor: msg.sender === currentUser.uid ? '#7b2cbf' : '#5a189a',
-              padding: '8px 12px',
-              borderRadius: '10px',
-              maxWidth: '70%',
-              color: 'white'
-            }}>
-              <b>{msg.senderName || 'Unknown'}</b>: {msg.text}
-              <div style={{ fontSize: '0.75em', marginTop: '4px', opacity: 0.6 }}>
-                {formatTime(msg.timestamp)}
-              </div>
+            <div style={{ fontSize: '12px', opacity: 0.7 }}>
+              {usernames[msg.sender] || 'Unknown'}
             </div>
+            <div>{msg.text}</div>
           </div>
         ))}
+        <div ref={bottomRef}></div>
       </div>
+
+      {showScrollButton && (
+        <button
+          onClick={scrollToBottom}
+          style={{
+            position: 'fixed',
+            bottom: '80px',
+            right: '30px',
+            padding: '10px',
+            borderRadius: '50%',
+            background: '#444',
+            color: 'white',
+            border: 'none',
+            cursor: 'pointer',
+            zIndex: 1000,
+          }}
+        >
+          ↓
+        </button>
+      )}
+
       <div>
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Type a message..."
-          style={{ width: '60%', padding: '8px', marginRight: '5px' }}
-        />
-        <button onClick={() => setShowEmoji(!showEmoji)}>😄</button>
+        <input value={text} onChange={e => setText(e.target.value)} />
+        <button onClick={() => setShowEmojiPicker(prev => !prev)}>😀</button>
         <button onClick={sendMessage}>Send</button>
       </div>
-      {showEmoji && (
-        <div style={{ position: 'absolute', zIndex: 1000 }}>
-          <EmojiPicker
-            onEmojiClick={(e) => setText(prev => prev + e.emoji)}
-            theme="dark"
-          />
-        </div>
-      )}
+      {showEmojiPicker && <EmojiPicker onEmojiClick={handleEmojiClick} />}
     </div>
   );
 }

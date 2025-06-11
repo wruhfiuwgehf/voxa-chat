@@ -1,27 +1,35 @@
+import './CreateGroup.css';
 import React, { useEffect, useState } from 'react';
-import { collection, addDoc, onSnapshot } from 'firebase/firestore';
 import { db, auth } from './firebase';
-import { useNavigate } from 'react-router-dom';
+import {
+  collection,
+  getDocs,
+  doc,
+  setDoc,
+  serverTimestamp,
+} from 'firebase/firestore';
+import './Users.css'; // optional for consistent styling
 
 function CreateGroup() {
-  const [groupName, setGroupName] = useState('');
   const [users, setUsers] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
-  const navigate = useNavigate();
+  const [groupName, setGroupName] = useState('');
+
   const currentUser = auth.currentUser;
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'users'), snapshot => {
-      const userList = snapshot.docs
-        .map(doc => doc.data())
-        .filter(user => user.uid !== currentUser.uid && user.username); // ✅ filter out self and invalid usernames
-      setUsers(userList);
-    });
+    const fetchUsers = async () => {
+      const snapshot = await getDocs(collection(db, 'users'));
+      const fetchedUsers = snapshot.docs
+        .map(doc => ({ uid: doc.id, ...doc.data() }))
+        .filter(user => user.uid !== currentUser.uid);
+      setUsers(fetchedUsers);
+    };
 
-    return () => unsubscribe();
-  }, [currentUser]);
+    fetchUsers();
+  }, [currentUser.uid]);
 
-  const toggleUser = (uid) => {
+  const toggleSelect = (uid) => {
     setSelectedUsers(prev =>
       prev.includes(uid)
         ? prev.filter(id => id !== uid)
@@ -34,67 +42,48 @@ function CreateGroup() {
       alert('Please enter a group name.');
       return;
     }
-
     if (selectedUsers.length === 0) {
       alert('Please select at least one user.');
       return;
     }
 
     try {
-      const groupRef = await addDoc(collection(db, 'groups'), {
+      const groupRef = doc(collection(db, 'groups'));
+      await setDoc(groupRef, {
         name: groupName,
-        members: [currentUser.uid, ...selectedUsers],
-        createdAt: new Date(),
+        members: [...selectedUsers, currentUser.uid],
+        createdAt: serverTimestamp(),
       });
-
-      navigate(`/group/${groupRef.id}`);
-    } catch (error) {
-      console.error('Error creating group:', error);
+      alert('Group created!');
+      setGroupName('');
+      setSelectedUsers([]);
+    } catch (err) {
+      console.error('Error creating group:', err);
       alert('Failed to create group. Please try again.');
     }
   };
 
   return (
-    <div style={{ color: 'white', padding: '20px', maxWidth: '600px', margin: 'auto' }}>
-      <h2>Create Group</h2>
+    <div className="create-group-container">
+      <h2>Create a Group</h2>
       <input
         type="text"
-        placeholder="Group name"
+        placeholder="Group Name"
         value={groupName}
-        onChange={e => setGroupName(e.target.value)}
-        style={{ padding: '10px', width: '100%', marginBottom: '20px', borderRadius: '8px' }}
+        onChange={(e) => setGroupName(e.target.value)}
       />
-      <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-        {users.map(user => (
+      <div className="user-list">
+        {users.map((user) => (
           <div
             key={user.uid}
-            onClick={() => toggleUser(user.uid)}
-            style={{
-              padding: '10px',
-              margin: '5px 0',
-              backgroundColor: selectedUsers.includes(user.uid) ? '#6c5ce7' : 'rgba(255,255,255,0.1)',
-              borderRadius: '8px',
-              cursor: 'pointer'
-            }}
+            className={`user-item ${selectedUsers.includes(user.uid) ? 'selected' : ''}`}
+            onClick={() => toggleSelect(user.uid)}
           >
-            {user.username}
+            {user.username || 'Unnamed User'}
           </div>
         ))}
       </div>
-      <button
-        onClick={createGroup}
-        style={{
-          marginTop: '20px',
-          padding: '10px 20px',
-          border: 'none',
-          borderRadius: '8px',
-          background: '#a29bfe',
-          color: 'white',
-          cursor: 'pointer'
-        }}
-      >
-        Create Group
-      </button>
+      <button onClick={createGroup}>Create Group</button>
     </div>
   );
 }

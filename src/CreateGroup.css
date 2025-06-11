@@ -1,0 +1,66 @@
+.create-group-container {
+  max-width: 600px;
+  margin: 40px auto;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.2);
+  text-align: center;
+  color: #fff;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+.create-group-container input {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 16px;
+  border: none;
+  border-radius: 8px;
+  background: #2e2e2e;
+  color: #fff;
+  font-size: 16px;
+}
+
+.user-list {
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 20px;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.user-item {
+  padding: 10px 16px;
+  margin: 6px 0;
+  border-radius: 6px;
+  background: #3a3a3a;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.user-item:hover {
+  background: #4a4a4a;
+}
+
+.user-item.selected {
+  background: #6e3b8f;
+  color: #fff;
+  font-weight: bold;
+}
+
+.create-group-container button {
+  padding: 12px 24px;
+  font-size: 16px;
+  background: linear-gradient(135deg, #8e44ad, #c0392b);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.2s ease-in-out;
+}
+
+.create-group-container button:hover {
+  transform: scale(1.05);
+  background: linear-gradient(135deg, #9b59b6, #e74c3c);
+}

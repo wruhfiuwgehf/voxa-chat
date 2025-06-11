@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, deleteDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { useNavigate } from 'react-router-dom';
 
@@ -11,9 +11,22 @@ function Friends() {
   useEffect(() => {
     const fetchFriends = async () => {
       const snapshot = await getDocs(collection(db, 'users', currentUser.uid, 'friends'));
-      const data = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
-      setFriends(data);
+
+      const friendsWithUsernames = await Promise.all(
+        snapshot.docs.map(async docSnap => {
+          const uid = docSnap.id;
+          const userDoc = await getDoc(doc(db, 'users', uid));
+          const userData = userDoc.exists() ? userDoc.data() : { username: 'Unknown' };
+          return {
+            uid,
+            username: userData.username || 'Unknown',
+          };
+        })
+      );
+
+      setFriends(friendsWithUsernames);
     };
+
     fetchFriends();
   }, [currentUser.uid]);
 
@@ -46,10 +59,16 @@ function Friends() {
                 borderRadius: '4px',
               }}
             >
-              <span onClick={() => handleChat(friend.uid)} style={{ cursor: 'pointer', color: '#fff' }}>
+              <span
+                onClick={() => handleChat(friend.uid)}
+                style={{ cursor: 'pointer', color: '#fff' }}
+              >
                 {friend.username}
               </span>
-              <button onClick={() => handleUnfriend(friend.uid)} style={{ color: 'white' }}>
+              <button
+                onClick={() => handleUnfriend(friend.uid)}
+                style={{ color: 'white' }}
+              >
                 Unfriend
               </button>
             </div>
