@@ -1,7 +1,4 @@
-import { doc, getDoc } from 'firebase/firestore';
-import React, { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { auth, db } from './firebase';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   collection,
   addDoc,
@@ -9,136 +6,148 @@ import {
   orderBy,
   where,
   onSnapshot,
+  updateDoc,
+  doc,
+  getDoc,
   serverTimestamp,
 } from 'firebase/firestore';
-import EmojiPicker from 'emoji-picker-react';
+import { useParams } from 'react-router-dom';
+import { db, auth } from './firebase';
+import './Chat.css';
 
 function Chat() {
-  const { id } = useParams();
+  const { id } = useParams(); // target user's UID
   const currentUser = auth.currentUser;
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [usernames, setUsernames] = useState({});
+  const chatEndRef = useRef(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
-  const bottomRef = useRef();
-  const containerRef = useRef();
+  const chatContainerRef = useRef(null);
+
+  const getChatId = (uid1, uid2) => {
+    return uid1 > uid2 ? `${uid1}_${uid2}` : `${uid2}_${uid1}`;
+  };
 
   useEffect(() => {
     const q = query(
       collection(db, 'messages'),
-      orderBy('timestamp'),
-      where('chatId', '==', getChatId(currentUser.uid, id))
+      where('chatId', '==', getChatId(currentUser.uid, id)),
+      orderBy('timestamp')
     );
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       const msgs = [];
-      const nameMap = { ...usernames };
+      const newUsernames = { ...usernames };
 
       for (const docSnap of snapshot.docs) {
         const data = docSnap.data();
-        if (!nameMap[data.sender]) {
-          const userSnap = await getDoc(doc(db, 'users', data.sender));
+        const senderId = data.sender;
 
-          nameMap[data.sender] = userSnap.exists ? userSnap.data().username : 'Unknown';
+        if (!newUsernames[senderId]) {
+          const userDoc = await getDoc(doc(db, 'users', senderId));
+          if (userDoc.exists()) {
+            newUsernames[senderId] = userDoc.data().username || 'Unknown';
+          }
         }
-        msgs.push(data);
+
+        // Mark messages as read
+        if (data.receiver === currentUser.uid && !data.read) {
+          await updateDoc(doc(db, 'messages', docSnap.id), {
+            read: true,
+          });
+        }
+
+        msgs.push({ id: docSnap.id, ...data });
       }
 
-      setUsernames(nameMap);
       setMessages(msgs);
+      setUsernames(newUsernames);
+
+      // Auto-scroll after rendering
+      setTimeout(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 50);
     });
 
     return () => unsubscribe();
-  }, [id]);
+  }, [currentUser.uid, id]);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  const handleSend = async () => {
+    if (!text.trim()) return;
 
-  const getChatId = (uid1, uid2) => {
-    return [uid1, uid2].sort().join('_');
+    await addDoc(collection(db, 'messages'), {
+      text: text.trim(),
+      sender: currentUser.uid,
+      receiver: id,
+      timestamp: serverTimestamp(),
+      chatId: getChatId(currentUser.uid, id),
+      read: false,
+    });
+
+    setText('');
   };
 
-  const sendMessage = async () => {
-    if (text.trim()) {
-      await addDoc(collection(db, 'messages'), {
-        text,
-        sender: currentUser.uid,
-        receiver: id,
-        chatId: getChatId(currentUser.uid, id),
-        timestamp: serverTimestamp(),
-      });
-      setText('');
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSend();
     }
   };
 
-  const handleEmojiClick = (emojiData) => {
-    setText(prev => prev + emojiData.emoji);
+  const handleScroll = () => {
+    const container = chatContainerRef.current;
+    if (container) {
+      const isAtBottom =
+        container.scrollHeight - container.scrollTop <= container.clientHeight + 10;
+      setShowScrollButton(!isAtBottom);
+    }
   };
 
   const scrollToBottom = () => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  const handleScroll = () => {
-    if (!containerRef.current) return;
-    const { scrollTop, clientHeight, scrollHeight } = containerRef.current;
-    setShowScrollButton(scrollHeight - scrollTop > clientHeight + 200);
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   return (
-    <div>
-      <h2>Chat</h2>
-      <div
-        ref={containerRef}
-        style={{ height: '400px', overflowY: 'auto', border: '1px solid #ccc', padding: '10px' }}
-        onScroll={handleScroll}
-      >
-        {messages.map((msg, i) => (
+    <div className="chat-container">
+      <h2 className="chat-title">Private Chat</h2>
+      <div className="chat-messages" onScroll={handleScroll} ref={chatContainerRef}>
+        {messages.map((msg) => (
           <div
-            key={i}
-            style={{
-              marginBottom: 10,
-              textAlign: msg.sender === currentUser.uid ? 'right' : 'left',
-              color: msg.sender === currentUser.uid ? 'cyan' : 'pink',
-            }}
+            key={msg.id}
+            className={`message-bubble ${msg.sender === currentUser.uid ? 'own' : 'other'}`}
           >
-            <div style={{ fontSize: '12px', opacity: 0.7 }}>
-              {usernames[msg.sender] || 'Unknown'}
+            <div className="sender-name">
+              {usernames[msg.sender] || msg.sender}
             </div>
-            <div>{msg.text}</div>
+            <div className="message-text">{msg.text}</div>
+            {msg.timestamp?.seconds && (
+              <div className="message-time">
+                {new Date(msg.timestamp.seconds * 1000).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </div>
+            )}
           </div>
         ))}
-        <div ref={bottomRef}></div>
+        <div ref={chatEndRef}></div>
+        {showScrollButton && (
+          <button className="scroll-to-bottom" onClick={scrollToBottom}>
+            ⬇️
+          </button>
+        )}
       </div>
-
-      {showScrollButton && (
-        <button
-          onClick={scrollToBottom}
-          style={{
-            position: 'fixed',
-            bottom: '80px',
-            right: '30px',
-            padding: '10px',
-            borderRadius: '50%',
-            background: '#444',
-            color: 'white',
-            border: 'none',
-            cursor: 'pointer',
-            zIndex: 1000,
-          }}
-        >
-          ↓
-        </button>
-      )}
-
-      <div>
-        <input value={text} onChange={e => setText(e.target.value)} />
-        <button onClick={() => setShowEmojiPicker(prev => !prev)}>😀</button>
-        <button onClick={sendMessage}>Send</button>
+      <div className="chat-input-area">
+        <textarea
+          placeholder="Type a message..."
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="chat-textarea"
+        />
+        <button onClick={handleSend} className="send-button">Send</button>
       </div>
-      {showEmojiPicker && <EmojiPicker onEmojiClick={handleEmojiClick} />}
     </div>
   );
 }
