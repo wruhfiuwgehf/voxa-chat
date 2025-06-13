@@ -17,7 +17,7 @@ function Dashboard() {
         <button style={styles.button} onClick={() => navigate('/users')}>Users</button>
         <button style={styles.button} onClick={() => navigate('/friends')}>Friends</button>
         <button style={styles.button} onClick={() => navigate('/grouplist')}>Group Chats</button>
-        <button style={styles.button} onClick={() => navigate('/group/create')}>Create Group</button>
+        <button style={styles.button} onClick={() => navigate('/creategroup')}>Create Group</button>
         <button style={styles.logoutButton} onClick={handleLogout}>Logout</button>
       </div>
     </div>

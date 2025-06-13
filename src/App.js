@@ -28,8 +28,8 @@ function App() {
       <ParticlesBackground />
       <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh', padding: '20px', color: 'white' }}>
         <Routes>
-          <Route path="/group/:groupId" element={<GroupChat />} />
-          <Route path="/" element={<Welcome />} />
+          <Route path="/creategroup" element={<CreateGroup />} />  // this is for the form
+<Route path="/group/:groupId" element={<GroupChat />} /> <Route path="/" element={<Welcome />} />
           <Route path="/signup" element={!user ? <Signup /> : <Navigate to="/dashboard" />} />
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" />} />
           <Route path="/dashboard" element={user ? <Dashboard /> : <Navigate to="/login" />} />
@@ -38,9 +38,8 @@ function App() {
           <Route path="/chat/:id" element={user ? <Chat /> : <Navigate to="/login" />} />
           <Route path="/group/:groupId" element={user ? <GroupChat /> : <Navigate to="/login" />} />
           <Route path="/grouplist" element={user ? <GroupList /> : <Navigate to="/login" />} />
-         <Route path="/creategroup" element={user ? <CreateGroup /> : <Navigate to="/login" />} />
+          <Route path="/creategroup" element={user ? <CreateGroup /> : <Navigate to="/login" />} />
           <Route path="*" element={<Navigate to="/" />} />
-
         </Routes>
       </div>
     </div>

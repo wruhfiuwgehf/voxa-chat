@@ -1,31 +1,33 @@
-import React, { useEffect, useState } from 'react';
-import { collection, getDocs, addDoc } from 'firebase/firestore';
-import { db, auth } from './firebase';
+import React, { useState, useEffect } from 'react';
+import { collection, addDoc, getDocs } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
-import './Users.css';
+import { auth, db } from './firebase';
 
 function CreateGroup() {
-  const [users, setUsers] = useState([]);
   const [groupName, setGroupName] = useState('');
+  const [users, setUsers] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
   const navigate = useNavigate();
-  const currentUser = auth.currentUser;
 
   useEffect(() => {
     const fetchUsers = async () => {
       const snapshot = await getDocs(collection(db, 'users'));
-      const list = snapshot.docs
+      const currentUser = auth.currentUser;
+      const userList = snapshot.docs
         .map(doc => ({ uid: doc.id, ...doc.data() }))
         .filter(user => user.uid !== currentUser.uid);
-      setUsers(list);
+      setUsers(userList);
     };
+
     fetchUsers();
-  }, [currentUser.uid]);
+  }, []);
 
   const toggleUser = (uid) => {
-    setSelectedUsers(prev =>
-      prev.includes(uid) ? prev.filter(id => id !== uid) : [...prev, uid]
-    );
+    if (selectedUsers.includes(uid)) {
+      setSelectedUsers(prev => prev.filter(id => id !== uid));
+    } else {
+      setSelectedUsers(prev => [...prev, uid]);
+    }
   };
 
   const createGroup = async () => {
@@ -34,44 +36,43 @@ function CreateGroup() {
       return;
     }
 
-    const groupData = {
+    const groupDoc = await addDoc(collection(db, 'groups'), {
       name: groupName,
-      members: [currentUser.uid, ...selectedUsers],
-      createdAt: new Date()
-    };
+      members: [...selectedUsers, auth.currentUser.uid],
+      createdBy: auth.currentUser.uid,
+    });
 
-    try {
-      const groupRef = await addDoc(collection(db, 'groups'), groupData);
-      navigate(`/group/${groupRef.id}`); // ✅ Navigate directly to the created group
-    } catch (error) {
-      console.error('Create Group Error:', error);
-      alert('Group creation failed. Try again.');
-    }
+    navigate(`/group/${groupDoc.id}`);
   };
 
   return (
-    <div className="users-container">
-      <h2>Create a New Group</h2>
+    <div>
+      <h2>Create Group</h2>
       <input
-        placeholder="Group name"
+        type="text"
+        placeholder="Group Name"
         value={groupName}
         onChange={e => setGroupName(e.target.value)}
-        className="user-input"
+        style={{ padding: '8px', marginBottom: '10px', width: '300px' }}
       />
-      <ul className="users-list">
-        {users.map(user => (
-          <li
-            key={user.uid}
-            className={`user-item ${selectedUsers.includes(user.uid) ? 'selected' : ''}`}
-            onClick={() => toggleUser(user.uid)}
-          >
-            {user.username || user.email}
-          </li>
-        ))}
-      </ul>
-      <button onClick={createGroup} className="user-action-button">
-        Create Group
-      </button>
+      <div>
+        <h4>Select Users:</h4>
+        <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid #ccc', padding: '10px' }}>
+          {users.map(user => (
+            <div key={user.uid}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={selectedUsers.includes(user.uid)}
+                  onChange={() => toggleUser(user.uid)}
+                />
+                {user.username || 'Unnamed'}
+              </label>
+            </div>
+          ))}
+        </div>
+      </div>
+      <button onClick={createGroup} style={{ marginTop: '20px' }}>Create Group</button>
     </div>
   );
 }
