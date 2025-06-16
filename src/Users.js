@@ -1,125 +1,76 @@
-// Users.js
 import React, { useEffect, useState } from 'react';
-import {
-  collection,
-  getDocs,
-  onSnapshot,
-  setDoc,
-  doc,
-  getDoc,
-  updateDoc,
-  serverTimestamp,
-} from 'firebase/firestore';
-import { useNavigate } from 'react-router-dom';
+import { collection, onSnapshot, doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import { useNavigate } from 'react-router-dom';
 import './Users.css';
 
 function Users() {
   const [users, setUsers] = useState([]);
   const [friends, setFriends] = useState([]);
-  const [unreadCounts, setUnreadCounts] = useState({});
-  const navigate = useNavigate();
   const currentUser = auth.currentUser;
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
-      const userList = snapshot.docs
-        .filter((doc) => doc.id !== currentUser.uid)
-        .map((doc) => ({ uid: doc.id, ...doc.data() }));
-      setUsers(userList);
+    if (!currentUser) return;
+
+    const unsubscribe = onSnapshot(collection(db, 'users'), snapshot => {
+      const data = snapshot.docs
+        .map(doc => ({ uid: doc.id, ...doc.data() }))
+        .filter(user => user.uid !== currentUser.uid);
+      setUsers(data);
     });
 
     return () => unsubscribe();
-  }, [currentUser.uid]);
+  }, [currentUser]);
 
   useEffect(() => {
-    const fetchFriends = async () => {
-      const snapshot = await getDocs(collection(db, 'users', currentUser.uid, 'friends'));
-      setFriends(snapshot.docs.map((doc) => doc.id));
-    };
-    fetchFriends();
-  }, [currentUser.uid]);
-
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'messages'), (snapshot) => {
-      const counts = {};
-      snapshot.docs.forEach((doc) => {
-        const data = doc.data();
-        const chatId = getChatId(currentUser.uid, data.sender);
-        if (
-          data.receiver === currentUser.uid &&
-          !data.read &&
-          data.sender !== currentUser.uid
-        ) {
-          counts[data.sender] = (counts[data.sender] || 0) + 1;
-        }
-      });
-      setUnreadCounts(counts);
+    if (!currentUser) return;
+    const unsubscribe = onSnapshot(collection(db, 'users', currentUser.uid, 'friends'), snapshot => {
+      setFriends(snapshot.docs.map(doc => doc.id));
     });
 
     return () => unsubscribe();
-  }, [currentUser.uid]);
+  }, [currentUser]);
 
-  const getChatId = (uid1, uid2) => {
-    return uid1 > uid2 ? `${uid1}_${uid2}` : `${uid2}_${uid1}`;
-  };
+  const toggleFriend = async (user) => {
+    const friendRef = doc(db, 'users', currentUser.uid, 'friends', user.uid);
+    const docSnap = await getDoc(friendRef);
 
-  const toggleFriend = async (uid) => {
-    const friendRef = doc(db, 'users', currentUser.uid, 'friends', uid);
-    const friendSnap = await getDoc(friendRef);
-    if (friendSnap.exists()) {
-      await updateDoc(friendRef, {});
-      await setDoc(friendRef, {}, { merge: true });
-      setFriends((prev) => prev.filter((id) => id !== uid));
+    if (docSnap.exists()) {
+      await setDoc(friendRef, {}, { merge: true }); // already exists, remove later if needed
     } else {
-      await setDoc(friendRef, { timestamp: serverTimestamp() });
-      setFriends((prev) => [...prev, uid]);
+      await setDoc(friendRef, {
+        username: user.username || '',
+        avatar: user.avatar || ''
+      });
     }
   };
 
-  const handleChat = async (uid) => {
-    // Clear unread count
-    const chatId = getChatId(currentUser.uid, uid);
-    const snapshot = await getDocs(collection(db, 'messages'));
-    snapshot.docs.forEach(async (docSnap) => {
-      const msg = docSnap.data();
-      if (
-        msg.receiver === currentUser.uid &&
-        msg.sender === uid &&
-        !msg.read
-      ) {
-        await updateDoc(doc(db, 'messages', docSnap.id), { read: true });
-      }
-    });
+  const goToChat = (uid) => {
     navigate(`/chat/${uid}`);
   };
 
-  const sortedUsers = [...users].sort((a, b) => {
-    const countA = unreadCounts[a.uid] || 0;
-    const countB = unreadCounts[b.uid] || 0;
-    return countB - countA;
-  });
-
   return (
-    <div className="users-tab">
+    <div className="users-container">
       <h2>All Users</h2>
-      <ul className="user-list">
-        {sortedUsers.map((user) => (
-          <li key={user.uid} className="user-item">
-            <div className="user-info" onClick={() => handleChat(user.uid)}>
-              <span className="username">{user.username || 'Unnamed'}</span>
-              {unreadCounts[user.uid] > 0 && (
-                <span className="badge">{unreadCounts[user.uid]}</span>
-              )}
-            </div>
-            <button
-              className={`heart-btn ${friends.includes(user.uid) ? 'friended' : ''}`}
-              onClick={() => toggleFriend(user.uid)}
-            >
-              ❤️
-            </button>
-          </li>
-        ))}
+      <ul>
+        {users.length === 0 ? (
+          <p>No users found.</p>
+        ) : (
+          users.map((user) => (
+            <li key={user.uid} className="user-entry">
+              <span className="user-name" onClick={() => goToChat(user.uid)}>
+                {user.username || 'Unnamed'}
+              </span>
+              <button
+                className={`friend-button ${friends.includes(user.uid) ? 'friended' : ''}`}
+                onClick={() => toggleFriend(user)}
+              >
+                ❤️
+              </button>
+            </li>
+          ))
+        )}
       </ul>
     </div>
   );
